@@ -47,7 +47,7 @@ pub async fn run() -> Result<(), String> {
     // let pretty_json_string = serde_json::to_string_pretty(&res_json).map_err(|e| e.to_string())?;
     // println!("{}", pretty_json_string);
 
-    // BLOCK
+    // 1段目のBLOCK
     // let parent_page_id = res_json["id"].as_str().unwrap_or("");
     let parent_page_id = "81a99280-fc96-455f-961e-eca8197b386e";
 
@@ -69,11 +69,71 @@ pub async fn run() -> Result<(), String> {
                                 "content": "意味",
                             },
                             "annotations": {
-                                "color": "blue"
-                            }
+                                "color": "blue",
+                            },
                         }
                     ]
                 },
+            },
+            {
+                "object": "block",
+                "type": "toggle",
+                "toggle": {
+                    "text": [
+                        {
+                            "type": "text",
+                            "text": {
+                                "content": "語源",
+                            },
+                            "annotations": {
+                                "color": "blue",
+                            },
+                        }
+                    ]
+                },
+            }
+        ],
+    });
+
+    let res = client
+        .patch(&url)
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Notion-Version", "2021-08-16")
+        .json(&meaning_block)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let res_text = res.text().await.map_err(|e| e.to_string())?;
+    let res_json: serde_json::Value = serde_json::from_str(&res_text).map_err(|e| e.to_string())?;
+    let pretty_json_string = serde_json::to_string_pretty(&res_json).unwrap_or_default();
+    println!("Block Content: {}", pretty_json_string);
+
+    // トグルのchildren作成
+    let results = res_json["results"].as_array().expect("resultsでエラー");
+    let first_result = &results[0];
+    let parent_block_id = first_result["id"].as_str().expect("parentエラー");
+
+    let url = format!(
+        "https://api.notion.com/v1/blocks/{}/children",
+        parent_block_id
+    );
+
+    let meaning_block = json!({
+        "children": [  // この部分を追加
+            {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "text": [
+                        {
+                            "type": "text",
+                            "text": {
+                                "content": "これは新しいパラグラフです。"
+                            }
+                        }
+                    ]
+                }
             }
         ]
     });
@@ -90,6 +150,7 @@ pub async fn run() -> Result<(), String> {
     let res_text = res.text().await.map_err(|e| e.to_string())?;
     let res_json: serde_json::Value = serde_json::from_str(&res_text).map_err(|e| e.to_string())?;
     let pretty_json_string = serde_json::to_string_pretty(&res_json).unwrap_or_default();
+    println!("Block id: {}", parent_block_id);
     println!("Block Content: {}", pretty_json_string);
 
     Ok(())
