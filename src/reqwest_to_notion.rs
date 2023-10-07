@@ -34,22 +34,22 @@ pub async fn run() -> Result<(), String> {
             }
         }
     });
-    let res = client
-        .post(&url)
-        .header("Authorization", format!("Bearer {}", token))
-        .header("Notion-Version", "2021-08-16")
-        .json(&new_page_data)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-    let res_text = res.text().await.map_err(|e| e.to_string())?;
-    let res_json: serde_json::Value = serde_json::from_str(&res_text).map_err(|e| e.to_string())?;
-    let pretty_json_string = serde_json::to_string_pretty(&res_json).map_err(|e| e.to_string())?;
-    println!("{}", pretty_json_string);
+    // let res = client
+    //     .post(&url)
+    //     .header("Authorization", format!("Bearer {}", token))
+    //     .header("Notion-Version", "2021-08-16")
+    //     .json(&new_page_data)
+    //     .send()
+    //     .await
+    //     .map_err(|e| e.to_string())?;
+    // let res_text = res.text().await.map_err(|e| e.to_string())?;
+    // let res_json: serde_json::Value = serde_json::from_str(&res_text).map_err(|e| e.to_string())?;
+    // let pretty_json_string = serde_json::to_string_pretty(&res_json).map_err(|e| e.to_string())?;
+    // println!("{}", pretty_json_string);
 
     // BLOCK
-    let parent_page_id = res_json["id"].as_str().unwrap_or("");
-    // let parent_page_id = "81a99280-fc96-455f-961e-eca8197b386e";
+    // let parent_page_id = res_json["id"].as_str().unwrap_or("");
+    let parent_page_id = "81a99280-fc96-455f-961e-eca8197b386e";
 
     let url = format!(
         "https://api.notion.com/v1/blocks/{}/children",
@@ -58,19 +58,24 @@ pub async fn run() -> Result<(), String> {
 
     let meaning_block = json!({
         "children": [
-        {
-            "paragraph": {
-                "text": [
-                    {
-                        "type": "text",
-                        "text": {
-                            "content": "2回目のてすと"
+            {
+                "object": "block",
+                "type": "toggle",
+                "toggle": {
+                    "text": [
+                        {
+                            "type": "text",
+                            "text": {
+                                "content": "意味",
+                            },
+                            "annotations": {
+                                "color": "blue"
+                            }
                         }
-                    }
-                ]
+                    ]
+                },
             }
-        }
-    ]
+        ]
     });
 
     let res = client
