@@ -91,7 +91,85 @@ pub async fn run() -> Result<(), String> {
                         }
                     ]
                 },
-            }
+            },
+            {
+                "object": "block",
+                "type": "callout",
+                "callout": {
+                    "text": [
+                        {
+                            "type": "text",
+                            "text": {
+                                "content": "コロケーション",
+                            },
+                            "annotations": {
+                                "color": "blue",
+                            },
+                        }
+                    ],
+                    "icon": {
+                        "type": "emoji",
+                        "emoji": "📎"
+                    },
+                }
+            },
+            {
+                "object": "block",
+                "type": "callout",
+                "callout": {
+                    "text": [
+                        {
+                            "type": "text",
+                            "text": {
+                                "content": "例文",
+                            },
+                            "annotations": {
+                                "color": "blue",
+                            },
+                        }
+                    ],
+                    "icon": {
+                        "type": "emoji",
+                        "emoji": "📎"
+                    },
+                }
+            },
+            {
+                "object": "block",
+                "type": "callout",
+                "callout": {
+                    "text": [
+                        {
+                            "type": "text",
+                            "text": {
+                                "content": "イメージ",
+                            },
+                        }
+                    ],
+                    "icon": {
+                        "type": "emoji",
+                        "emoji": "🖼️"
+                    },
+                }
+            },
+            {
+                "object": "block",
+                "type": "callout",
+                "callout": {
+                    "text": [
+                        {
+                            "type": "text",
+                            "text": {
+                                "content": "自由記述",
+                            },
+                        }
+                    ],
+                    "icon": {
+                        "type": "emoji",
+                        "emoji": "✏️"
+                    },
+                }
+            },
         ],
     });
 
@@ -109,7 +187,7 @@ pub async fn run() -> Result<(), String> {
     let pretty_json_string = serde_json::to_string_pretty(&res_json).unwrap_or_default();
     println!("Block Content: {}", pretty_json_string);
 
-    // トグルのchildren作成
+    // トグルのchildren作成(合計5つ作成)
     let results = res_json["results"].as_array().expect("resultsでエラー");
     let first_result = &results[0];
     let parent_block_id = first_result["id"].as_str().expect("parentエラー");
@@ -120,7 +198,7 @@ pub async fn run() -> Result<(), String> {
     );
 
     let meaning_block = json!({
-        "children": [  // この部分を追加
+        "children": [
             {
                 "object": "block",
                 "type": "paragraph",
