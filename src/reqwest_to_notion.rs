@@ -34,7 +34,6 @@ pub async fn run() -> Result<(), String> {
             }
         }
     });
-
     let res = client
         .post(&url)
         .header("Authorization", format!("Bearer {}", token))
@@ -43,19 +42,50 @@ pub async fn run() -> Result<(), String> {
         .send()
         .await
         .map_err(|e| e.to_string())?;
+    let res_text = res.text().await.map_err(|e| e.to_string())?;
+    let res_json: serde_json::Value = serde_json::from_str(&res_text).map_err(|e| e.to_string())?;
+    let pretty_json_string = serde_json::to_string_pretty(&res_json).map_err(|e| e.to_string())?;
+    println!("{}", pretty_json_string);
+
+    // BLOCK
+    let parent_page_id = res_json["id"].as_str().unwrap_or("");
+    // let parent_page_id = "81a99280-fc96-455f-961e-eca8197b386e";
+
+    let url = format!(
+        "https://api.notion.com/v1/blocks/{}/children",
+        parent_page_id
+    );
+
+    let meaning_block = json!({
+        "children": [
+        {
+            "paragraph": {
+                "text": [
+                    {
+                        "type": "text",
+                        "text": {
+                            "content": "2回目のてすと"
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+    });
+
+    let res = client
+        .patch(&url)
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Notion-Version", "2021-08-16")
+        .json(&meaning_block)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
 
     let res_text = res.text().await.map_err(|e| e.to_string())?;
     let res_json: serde_json::Value = serde_json::from_str(&res_text).map_err(|e| e.to_string())?;
-    println!("New Page Created: {:?}", res_text);
-    let parent_page_id = res_json["id"].as_str().unwrap_or("");
-    println!("parent_id: {:?}", parent_page_id);
+    let pretty_json_string = serde_json::to_string_pretty(&res_json).unwrap_or_default();
+    println!("Block Content: {}", pretty_json_string);
 
     Ok(())
 }
-
-// pub async fn add_sub_page(res_text: String) -> Result<(), String> {
-//     let res_json: serde_json::Value = serde_json::from_str(&res_text).map_err(|e| e.to_string())?;
-//     let parent_id = res_json["id"].as_str().unwrap();
-
-//     Ok(())
-// }
