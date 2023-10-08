@@ -53,6 +53,27 @@ pub fn generate_parent_block() -> Value {
         "children": [
             {
                 "object": "block",
+                "type": "callout",
+                "callout": {
+                    "text": [
+                        {
+                            "type": "text",
+                            "text": {
+                                "content": "発音",
+                            },
+                            "annotations": {
+                                "color": "blue",
+                            },
+                        }
+                    ],
+                    "icon": {
+                        "type": "emoji",
+                        "emoji": "🗣️"
+                    },
+                }
+            },
+            {
+                "object": "block",
                 "type": "toggle",
                 "toggle": {
                     "text": [

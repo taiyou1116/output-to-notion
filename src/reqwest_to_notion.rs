@@ -57,7 +57,7 @@ pub async fn run(input: Vec<String>) -> Result<(), String> {
     if let Ok(results) = create_parent_block(&client, &token, res_json).await {
         let res = results["results"].as_array().expect("resultsでエラー");
 
-        let index_mapping = [(0, 2), (1, 3), (2, 4), (3, 5), (5, 6)];
+        let index_mapping = [(0, 2), (1, 3), (2, 4), (3, 5), (4, 6), (6, 7)];
 
         for (child_block_index, input_index) in index_mapping.into_iter() {
             match create_children_block(
