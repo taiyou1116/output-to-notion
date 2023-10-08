@@ -1,4 +1,5 @@
 mod copy_from_chatgpt;
+mod notion_json_template;
 mod reqwest_to_notion;
 
 #[tokio::main]

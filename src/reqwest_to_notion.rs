@@ -1,105 +1,80 @@
+use crate::notion_json_template;
 use dotenv::dotenv;
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde_json::Value;
 
-pub async fn run(input: Vec<String>) -> Result<(), String> {
-    dotenv().ok();
-    let token = std::env::var("TOKEN").unwrap();
-    let database_id = std::env::var("DBID").unwrap();
-    let url = format!("https://api.notion.com/v1/pages",);
+const NOTION_API_URL: &str = "https://api.notion.com/v1";
 
-    let client = Client::new();
+enum HttpMethod {
+    Post,
+    Patch,
+}
 
-    let first_input = &input[1];
-    let frequency;
-    if first_input == "非常によく使う(頻度9~10)" {
-        frequency = "🥇目から鱗";
-    } else if first_input == "よく使う(頻度6~8)" || first_input == "そこそこ使う(頻度3~5)"
-    {
-        frequency = "🥈超使える";
-    } else {
-        frequency = "🥉使える";
-    }
+async fn send_reqwest(
+    client: &Client,
+    url: &str,
+    token: &str,
+    meaning_block: &Value,
+    method: HttpMethod,
+) -> Result<Value, String> {
+    let req_builder = match method {
+        HttpMethod::Post => client.post(url),
+        HttpMethod::Patch => client.patch(url),
+    };
 
-    let new_page_data = json!({
-        "parent": { "database_id": database_id },
-        "properties": {
-            "Vocabulary": {
-                "title": [
-                    {
-                        "text": {
-                            "content": &input[0]
-                        }
-                    }
-                ]
-            },
-            "頻出度": {
-                "select": {
-                    "name": frequency
-                }
-            },
-            "習得度": {
-                "status": {
-                    "name": "インプット中"
-                }
-            }
-        }
-    });
-    let res = client
-        .post(&url)
+    let res = req_builder
         .header("Authorization", format!("Bearer {}", token))
         .header("Notion-Version", "2021-08-16")
-        .json(&new_page_data)
+        .json(meaning_block)
         .send()
         .await
         .map_err(|e| e.to_string())?;
     let res_text = res.text().await.map_err(|e| e.to_string())?;
     let res_json: serde_json::Value = serde_json::from_str(&res_text).map_err(|e| e.to_string())?;
-    // let pretty_json_string = serde_json::to_string_pretty(&res_json).map_err(|e| e.to_string())?;
-    // println!("{}", pretty_json_string);
 
+    Ok(res_json)
+}
+
+pub async fn run(input: Vec<String>) -> Result<(), String> {
+    dotenv().ok();
+    let token = std::env::var("TOKEN").unwrap();
+    let database_id = std::env::var("DBID").unwrap();
+    let url = format!("{}/pages", NOTION_API_URL);
+
+    let client = Client::new();
+
+    let frequency = match input[1].as_str() {
+        "非常によく使う(頻度9~10)" => "🥇目から鱗",
+        "よく使う(頻度6~8)" | "そこそこ使う(頻度3~5)" => "🥈超使える",
+        _ => "🥉使える",
+    };
+
+    // 新しいpageを作成(単語)
+    let new_page_data = notion_json_template::generate_new_page(database_id, &input[0], &frequency);
+    let res_json = send_reqwest(&client, &url, &token, &new_page_data, HttpMethod::Post).await?;
+
+    // blockを作成
     if let Ok(results) = create_parent_block(&client, &token, res_json).await {
         let res = results["results"].as_array().expect("resultsでエラー");
 
-        // parent_blockのchildrenの処理をこのスコープでおこなう
-        match create_children_block(&client, &token, &res, 0, &input[2]).await {
-            Ok(_) => {
-                println!("create children");
-            }
-            Err(e) => {
-                println!("Err create children: {}", e);
-            }
-        }
-        match create_children_block(&client, &token, &res, 1, &input[3]).await {
-            Ok(_) => {
-                println!("create children");
-            }
-            Err(e) => {
-                println!("Err create children: {}", e);
-            }
-        }
-        match create_children_block(&client, &token, &res, 2, &input[4]).await {
-            Ok(_) => {
-                println!("create children");
-            }
-            Err(e) => {
-                println!("Err create children: {}", e);
-            }
-        }
-        match create_children_block(&client, &token, &res, 3, &input[5]).await {
-            Ok(_) => {
-                println!("create children");
-            }
-            Err(e) => {
-                println!("Err create children: {}", e);
-            }
-        }
-        match create_children_block(&client, &token, &res, 5, &input[6]).await {
-            Ok(_) => {
-                println!("create children");
-            }
-            Err(e) => {
-                println!("Err create children: {}", e);
+        let index_mapping = [(0, 2), (1, 3), (2, 4), (3, 5), (5, 6)];
+
+        for (child_block_index, input_index) in index_mapping.into_iter() {
+            match create_children_block(
+                &client,
+                &token,
+                &res,
+                child_block_index,
+                &input[input_index],
+            )
+            .await
+            {
+                Ok(_) => {
+                    println!("create children");
+                }
+                Err(e) => {
+                    println!("Err create children: {}", e);
+                }
             }
         }
     } else {
@@ -116,47 +91,14 @@ async fn create_children_block(
     number: usize,
     content: &str,
 ) -> Result<Value, String> {
+    // 帰ってきた結果から'number番目のresult'を取得 -> そのresultから親のblock_idを取得
     let some_number_result = parent_block_value[number].clone();
     let parent_block_id = some_number_result["id"].as_str().expect("parentエラー");
 
-    let url = format!(
-        "https://api.notion.com/v1/blocks/{}/children",
-        parent_block_id
-    );
-
-    let meaning_block = json!({
-        "children": [
-            {
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "text": [
-                        {
-                            "type": "text",
-                            "text": {
-                                "content": content
-                            }
-                        }
-                    ]
-                }
-            }
-        ]
-    });
-
-    let res = client
-        .patch(&url)
-        .header("Authorization", format!("Bearer {}", token))
-        .header("Notion-Version", "2021-08-16")
-        .json(&meaning_block)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let res_text = res.text().await.map_err(|e| e.to_string())?;
-    let res_json: Value = serde_json::from_str(&res_text).map_err(|e| e.to_string())?;
-    // let pretty_json_string = serde_json::to_string_pretty(&res_json).unwrap_or_default();
-    // println!("Block id: {}", parent_block_id);
-    // println!("Block Content: {}", pretty_json_string);
+    // jsonテンプレートを受け取り、notionに新しくblockを作成 -> 結果を受け取る
+    let url = format!("{}/blocks/{}/children", NOTION_API_URL, parent_block_id);
+    let children_block = notion_json_template::generate_children_block(content);
+    let res_json = send_reqwest(&client, &url, &token, &children_block, HttpMethod::Patch).await?;
 
     Ok(res_json)
 }
@@ -166,145 +108,13 @@ async fn create_parent_block(
     token: &str,
     res_json: Value,
 ) -> Result<Value, String> {
-    // 1段目のBLOCK
+    // 帰ってきた結果から'result'を取得 -> そのresultから親のpage_idを取得
     let parent_page_id = res_json["id"].as_str().unwrap_or("");
-    // let parent_page_id = "81a99280-fc96-455f-961e-eca8197b386e";
 
-    let url = format!(
-        "https://api.notion.com/v1/blocks/{}/children",
-        parent_page_id
-    );
-
-    let meaning_block = json!({
-        "children": [
-            {
-                "object": "block",
-                "type": "toggle",
-                "toggle": {
-                    "text": [
-                        {
-                            "type": "text",
-                            "text": {
-                                "content": "意味",
-                            },
-                            "annotations": {
-                                "color": "blue",
-                            },
-                        }
-                    ]
-                },
-            },
-            {
-                "object": "block",
-                "type": "toggle",
-                "toggle": {
-                    "text": [
-                        {
-                            "type": "text",
-                            "text": {
-                                "content": "語源",
-                            },
-                            "annotations": {
-                                "color": "blue",
-                            },
-                        }
-                    ]
-                },
-            },
-            {
-                "object": "block",
-                "type": "callout",
-                "callout": {
-                    "text": [
-                        {
-                            "type": "text",
-                            "text": {
-                                "content": "コロケーション",
-                            },
-                            "annotations": {
-                                "color": "blue",
-                            },
-                        }
-                    ],
-                    "icon": {
-                        "type": "emoji",
-                        "emoji": "📎"
-                    },
-                }
-            },
-            {
-                "object": "block",
-                "type": "callout",
-                "callout": {
-                    "text": [
-                        {
-                            "type": "text",
-                            "text": {
-                                "content": "例文",
-                            },
-                            "annotations": {
-                                "color": "blue",
-                            },
-                        }
-                    ],
-                    "icon": {
-                        "type": "emoji",
-                        "emoji": "📎"
-                    },
-                }
-            },
-            {
-                "object": "block",
-                "type": "callout",
-                "callout": {
-                    "text": [
-                        {
-                            "type": "text",
-                            "text": {
-                                "content": "イメージ",
-                            },
-                        }
-                    ],
-                    "icon": {
-                        "type": "emoji",
-                        "emoji": "🖼️"
-                    },
-                }
-            },
-            {
-                "object": "block",
-                "type": "callout",
-                "callout": {
-                    "text": [
-                        {
-                            "type": "text",
-                            "text": {
-                                "content": "自由記述",
-                            },
-                        }
-                    ],
-                    "icon": {
-                        "type": "emoji",
-                        "emoji": "✏️"
-                    },
-                }
-            },
-        ],
-    });
-
-    let res = client
-        .patch(&url)
-        .header("Authorization", format!("Bearer {}", token))
-        .header("Notion-Version", "2021-08-16")
-        .json(&meaning_block)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let res_text = res.text().await.map_err(|e| e.to_string())?;
-    let res_json: Value = serde_json::from_str(&res_text).map_err(|e| e.to_string())?;
-    // let pretty_json_string = serde_json::to_string_pretty(&res_json).unwrap_or_default();
-    // println!("Block Content: {}", pretty_json_string);
+    // jsonテンプレートを受け取り、notionに新しくblockを作成 -> 結果を受け取る
+    let url = format!("{}/blocks/{}/children", NOTION_API_URL, parent_page_id);
+    let parent_block = notion_json_template::generate_parent_block();
+    let res_json = send_reqwest(&client, &url, &token, &parent_block, HttpMethod::Patch).await?;
 
     Ok(res_json)
 }
