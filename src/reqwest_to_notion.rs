@@ -59,6 +59,38 @@ pub async fn run() -> Result<(), String> {
                 println!("Err create children: {}", e);
             }
         }
+        match create_children_block(&client, &token, &res, 1).await {
+            Ok(_) => {
+                println!("create children");
+            }
+            Err(e) => {
+                println!("Err create children: {}", e);
+            }
+        }
+        match create_children_block(&client, &token, &res, 2).await {
+            Ok(_) => {
+                println!("create children");
+            }
+            Err(e) => {
+                println!("Err create children: {}", e);
+            }
+        }
+        match create_children_block(&client, &token, &res, 3).await {
+            Ok(_) => {
+                println!("create children");
+            }
+            Err(e) => {
+                println!("Err create children: {}", e);
+            }
+        }
+        match create_children_block(&client, &token, &res, 5).await {
+            Ok(_) => {
+                println!("create children");
+            }
+            Err(e) => {
+                println!("Err create children: {}", e);
+            }
+        }
     } else {
         println!("create parent err")
     }
