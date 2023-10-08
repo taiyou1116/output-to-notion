@@ -2,13 +2,24 @@ use dotenv::dotenv;
 use reqwest::Client;
 use serde_json::{json, Value};
 
-pub async fn run() -> Result<(), String> {
+pub async fn run(input: Vec<String>) -> Result<(), String> {
     dotenv().ok();
     let token = std::env::var("TOKEN").unwrap();
     let database_id = std::env::var("DBID").unwrap();
     let url = format!("https://api.notion.com/v1/pages",);
 
     let client = Client::new();
+
+    let first_input = &input[1];
+    let frequency;
+    if first_input == "非常によく使う(頻度9~10)" {
+        frequency = "🥇目から鱗";
+    } else if first_input == "よく使う(頻度6~8)" || first_input == "そこそこ使う(頻度3~5)"
+    {
+        frequency = "🥈超使える";
+    } else {
+        frequency = "🥉使える";
+    }
 
     let new_page_data = json!({
         "parent": { "database_id": database_id },
@@ -17,14 +28,14 @@ pub async fn run() -> Result<(), String> {
                 "title": [
                     {
                         "text": {
-                            "content": "test"
+                            "content": &input[0]
                         }
                     }
                 ]
             },
             "頻出度": {
                 "select": {
-                    "name": "🥈超使える"
+                    "name": frequency
                 }
             },
             "習得度": {
@@ -34,24 +45,24 @@ pub async fn run() -> Result<(), String> {
             }
         }
     });
-    // let res = client
-    //     .post(&url)
-    //     .header("Authorization", format!("Bearer {}", token))
-    //     .header("Notion-Version", "2021-08-16")
-    //     .json(&new_page_data)
-    //     .send()
-    //     .await
-    //     .map_err(|e| e.to_string())?;
-    // let res_text = res.text().await.map_err(|e| e.to_string())?;
-    // let res_json: serde_json::Value = serde_json::from_str(&res_text).map_err(|e| e.to_string())?;
+    let res = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Notion-Version", "2021-08-16")
+        .json(&new_page_data)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let res_text = res.text().await.map_err(|e| e.to_string())?;
+    let res_json: serde_json::Value = serde_json::from_str(&res_text).map_err(|e| e.to_string())?;
     // let pretty_json_string = serde_json::to_string_pretty(&res_json).map_err(|e| e.to_string())?;
     // println!("{}", pretty_json_string);
 
-    if let Ok(results) = create_parent_block(&client, &token).await {
+    if let Ok(results) = create_parent_block(&client, &token, res_json).await {
         let res = results["results"].as_array().expect("resultsでエラー");
 
         // parent_blockのchildrenの処理をこのスコープでおこなう
-        match create_children_block(&client, &token, &res, 0).await {
+        match create_children_block(&client, &token, &res, 0, &input[2]).await {
             Ok(_) => {
                 println!("create children");
             }
@@ -59,7 +70,7 @@ pub async fn run() -> Result<(), String> {
                 println!("Err create children: {}", e);
             }
         }
-        match create_children_block(&client, &token, &res, 1).await {
+        match create_children_block(&client, &token, &res, 1, &input[3]).await {
             Ok(_) => {
                 println!("create children");
             }
@@ -67,7 +78,7 @@ pub async fn run() -> Result<(), String> {
                 println!("Err create children: {}", e);
             }
         }
-        match create_children_block(&client, &token, &res, 2).await {
+        match create_children_block(&client, &token, &res, 2, &input[4]).await {
             Ok(_) => {
                 println!("create children");
             }
@@ -75,7 +86,7 @@ pub async fn run() -> Result<(), String> {
                 println!("Err create children: {}", e);
             }
         }
-        match create_children_block(&client, &token, &res, 3).await {
+        match create_children_block(&client, &token, &res, 3, &input[5]).await {
             Ok(_) => {
                 println!("create children");
             }
@@ -83,7 +94,7 @@ pub async fn run() -> Result<(), String> {
                 println!("Err create children: {}", e);
             }
         }
-        match create_children_block(&client, &token, &res, 5).await {
+        match create_children_block(&client, &token, &res, 5, &input[6]).await {
             Ok(_) => {
                 println!("create children");
             }
@@ -103,6 +114,7 @@ async fn create_children_block(
     token: &str,
     parent_block_value: &[Value],
     number: usize,
+    content: &str,
 ) -> Result<Value, String> {
     let some_number_result = parent_block_value[number].clone();
     let parent_block_id = some_number_result["id"].as_str().expect("parentエラー");
@@ -122,7 +134,7 @@ async fn create_children_block(
                         {
                             "type": "text",
                             "text": {
-                                "content": "これは新しいパラグラフです。"
+                                "content": content
                             }
                         }
                     ]
@@ -142,17 +154,21 @@ async fn create_children_block(
 
     let res_text = res.text().await.map_err(|e| e.to_string())?;
     let res_json: Value = serde_json::from_str(&res_text).map_err(|e| e.to_string())?;
-    let pretty_json_string = serde_json::to_string_pretty(&res_json).unwrap_or_default();
-    println!("Block id: {}", parent_block_id);
-    println!("Block Content: {}", pretty_json_string);
+    // let pretty_json_string = serde_json::to_string_pretty(&res_json).unwrap_or_default();
+    // println!("Block id: {}", parent_block_id);
+    // println!("Block Content: {}", pretty_json_string);
 
     Ok(res_json)
 }
 
-async fn create_parent_block(client: &Client, token: &str) -> Result<Value, String> {
+async fn create_parent_block(
+    client: &Client,
+    token: &str,
+    res_json: Value,
+) -> Result<Value, String> {
     // 1段目のBLOCK
-    // let parent_page_id = res_json["id"].as_str().unwrap_or("");
-    let parent_page_id = "81a99280-fc96-455f-961e-eca8197b386e";
+    let parent_page_id = res_json["id"].as_str().unwrap_or("");
+    // let parent_page_id = "81a99280-fc96-455f-961e-eca8197b386e";
 
     let url = format!(
         "https://api.notion.com/v1/blocks/{}/children",
@@ -287,8 +303,8 @@ async fn create_parent_block(client: &Client, token: &str) -> Result<Value, Stri
 
     let res_text = res.text().await.map_err(|e| e.to_string())?;
     let res_json: Value = serde_json::from_str(&res_text).map_err(|e| e.to_string())?;
-    let pretty_json_string = serde_json::to_string_pretty(&res_json).unwrap_or_default();
-    println!("Block Content: {}", pretty_json_string);
+    // let pretty_json_string = serde_json::to_string_pretty(&res_json).unwrap_or_default();
+    // println!("Block Content: {}", pretty_json_string);
 
     Ok(res_json)
 }
